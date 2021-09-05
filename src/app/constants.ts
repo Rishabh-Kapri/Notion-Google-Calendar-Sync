@@ -10,12 +10,17 @@ export enum Google {
 }
 
 export enum Notion {
-  GCAL_SYNC_PROPERTY = 'Is task on google calendar?',
-  GCAL_UPDATE_PROPERTY = 'Update on GCal',
-  GCAL_ID_PROPERTY = 'Calendar ID',
-  GCAL_EVENT_ID_PROPERTY = 'GCal Event ID',
-  TAGS_PROPERTY = 'Tags',
-  ENERGY_LEVEL_PROPERTY = 'Energy Level',
-  PROJECT_PROPERTY = 'Project',
+  GCAL_SYNC_PROP = 'Is task on google calendar?',
+  GCAL_UPDATE_PROP = 'Update on GCal',
+  GCAL_ID_PROP = 'Calendar ID',
+  GCAL_EVENT_ID_PROP = 'GCal Event ID',
+  DUE_DATE_PROP = 'Due Date',
+  TASK_NAME_PROP = 'Name',
+  TAGS_PROP = 'Tags',
+  DONE_PROP = 'Done',
+  ENERGY_LEVEL_PROP = 'Energy Level',
   DATABASE_ID = 'd9bdf793340b4b3eb9a2b837eca48c25',
+  DEFAULT_START_HOUR_UTC = 3,
+  DEFAULT_START_MINUTE_UTC = 30,
+  DEFAULT_INTERVAL = 30, // interval for the event in minutes
 }
