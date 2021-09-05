@@ -1,0 +1,38 @@
+{
+  "name": "notion-google-calendar-sync",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "ts-node ./src/index.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Rishabh-Kapri/Notion-Google-Calendar-Sync.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Rishabh-Kapri/Notion-Google-Calendar-Sync/issues"
+  },
+  "homepage": "https://github.com/Rishabh-Kapri/Notion-Google-Calendar-Sync#readme",
+  "dependencies": {
+    "@notionhq/client": "^0.3.1",
+    "express": "^4.17.1",
+    "googleapis": "^84.0.0",
+    "open": "^8.2.1",
+    "server-destroy": "^1.0.1"
+  },
+  "devDependencies": {
+    "@types/gapi": "0.0.41",
+    "@types/server-destroy": "^1.0.1",
+    "@typescript-eslint/eslint-plugin": "^4.30.0",
+    "@typescript-eslint/parser": "^4.30.0",
+    "eslint": "^7.32.0",
+    "eslint-config-airbnb-base": "^14.2.1",
+    "eslint-plugin-import": "^2.24.2",
+    "ts-node": "^10.2.1",
+    "typescript": "^4.4.2"
+  }
+}
