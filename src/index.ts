@@ -1,33 +1,21 @@
 import { calendar_v3 } from 'googleapis';
 
 import { initGCal } from './app/google-auth';
-import { notion } from './app/notion-auth';
 
 import { Notion } from './app/constants';
 import { Page } from '@notionhq/client/build/src/api-types';
+import * as notionUtils from './app/utils/notion.utils';
+import * as gCalUtils from './app/utils/google-calendar.utils';
 
-const {
-  GCAL_ID_PROPERTY,
-  GCAL_SYNC_PROPERTY,
-  GCAL_UPDATE_PROPERTY,
-  GCAL_EVENT_ID_PROPERTY,
-  TAGS_PROPERTY,
-  ENERGY_LEVEL_PROPERTY,
-  PROJECT_PROPERTY,
-  DATABASE_ID,
-} = Notion;
+const { GCAL_UPDATE_PROP, GCAL_EVENT_ID_PROP, TASK_NAME_PROP, TAGS_PROP } = Notion;
 
-// app.listen(SERVER_PORT, () => {
-//   console.log(`Server listening on port ${SERVER_PORT}`);
-// });
 let calendar: calendar_v3.Calendar;
 let gCalEventsByCalId: Record<string, calendar_v3.Schema$Event[]> = {};
 let allGcalEvents: calendar_v3.Schema$Event[] = [];
+let gCalEventsByEventId: Map<string, calendar_v3.Schema$Event> = new Map();
+let notionTasksByEventId: Map<string, Page> = new Map();
 let calendarList: calendar_v3.Schema$CalendarListEntry[] = [];
-let notionTasks = [];
-/**
- * @type {Calendar}
- */
+let notionTasks: Page[] = [];
 
 (async () => {
   try {
@@ -38,211 +26,108 @@ let notionTasks = [];
     for (let cal of calendarList) {
       const eventsRes = await calendar.events.list({ calendarId: cal.id as string });
       const events = eventsRes.data.items as calendar_v3.Schema$Event[];
+      events.forEach((event) => {
+        gCalEventsByEventId.set(event.id as string, event);
+      });
       gCalEventsByCalId[cal.id as string] = events;
       allGcalEvents = [...allGcalEvents, ...events];
     }
-    console.log(calendarList, allGcalEvents);
-    // const res = await calendar.events.list({ calendarId });
+
+    notionTasks = await notionUtils.getNotionTasks();
+    notionTasks.forEach((task) => {
+      const eventId = task.properties[GCAL_EVENT_ID_PROP]?.['rich_text']?.[0]?.plain_text ?? '';
+      if (eventId) {
+        notionTasksByEventId.set(eventId, task);
+      }
+    });
+
+    /**
+     * Tasks that are both in notion and google calendar
+     */
+    const commonTasks = notionTasks.filter((task) => {
+      return gCalEventsByEventId.has(task.properties[GCAL_EVENT_ID_PROP]?.['rich_text']?.[0]?.plain_text);
+    });
+
+    /**
+     * Tasks that are only in notion
+     */
+    const tasksOnlyInNotion = notionTasks.filter((task) => {
+      return !gCalEventsByEventId.has(task.properties[GCAL_EVENT_ID_PROP]?.['rich_text']?.[0]?.plain_text);
+    });
+
+    /**
+     * Tasks that are only in google calendar
+     */
+    const tasksOnlyInGCal = allGcalEvents.filter((event) => {
+      return !notionTasksByEventId.has(event.id as string);
+    });
+    console.log('COMMON TASKS:', commonTasks.length);
+    console.log('TASK ONLY IN NOTION:', tasksOnlyInNotion.length);
+    console.log('TASK ONLY IN GCAL:', tasksOnlyInGCal.length);
+
+    for (let task of tasksOnlyInNotion) {
+      if (!task.properties['Is Recurring?']?.['formula']?.['boolean']) {
+        // currently only supporting non-recurring tasks
+        const calendarNameFromTag = (task.properties[TAGS_PROP]?.['multi_select']?.[0]?.name as string) ?? '';
+        if (calendarNameFromTag) {
+          const existingCalId = gCalUtils.calendarAlreadyExist(calendarNameFromTag, calendarList);
+          if (existingCalId) {
+            // calendar for tag exist, create a new event
+            await gCalUtils.createNewEventFromNotionTask(calendar, existingCalId, task);
+          } else {
+            // create a new calendar with the calendar name
+            const timeZone = 'Asia/Kolkata';
+            const newCalendar = await gCalUtils.createNewCalendar(calendar, calendarNameFromTag, timeZone);
+            calendarList.push(newCalendar);
+            await gCalUtils.createNewEventFromNotionTask(calendar, newCalendar.id as string, task);
+          }
+        } else {
+          console.log(
+            `No tags to get calendar name for ${task.properties[TASK_NAME_PROP]['title']?.[0]?.plain_text}. Make sure the task is assigned atleast one tag`
+          );
+          continue;
+        }
+      }
+    }
+
+    for (let event of tasksOnlyInGCal) {
+      // @TODO
+      // need to parse description to get all tags and energy level
+      // maybe make a separate calendar column in notion because changing calendar will mess up all tags
+      const title = event.summary;
+      const tags = event.organizer?.displayName as string;
+      const startDate = event.start?.dateTime;
+      const endDate = event.end?.dateTime;
+      const calId = event.organizer?.email;
+      const eventId = event.id;
+      const updatedTime = event.updated;
+      if (startDate && endDate && title && calId && eventId && updatedTime) {
+        await notionUtils.createNotionTask(title, startDate, endDate, calId, eventId, updatedTime, tags);
+      }
+    }
+
+    for (let task of commonTasks) {
+      const eventId = task.properties[GCAL_EVENT_ID_PROP]?.['rich_text']?.[0]?.['plain_text'];
+      const calId = gCalEventsByEventId.get(eventId)?.organizer?.email as string;
+      if (task.properties[GCAL_UPDATE_PROP]?.['formula']?.['boolean']) {
+        console.log(`Updating "${task.properties[TASK_NAME_PROP]['title'][0]['plain_text']}" on google calendar`);
+        await gCalUtils.updateGCalEvent(calendar, calId, eventId, task);
+      } else if (gCalUtils.checkForGCalUpdateTime(gCalEventsByEventId, task)) {
+        console.log(`Updating "${task.properties[TASK_NAME_PROP]['title'][0]['plain_text']}" on notion`);
+        const gCalEvent = gCalEventsByEventId.get(eventId);
+        const title = gCalEvent?.summary as string;
+        const tags = gCalEvent?.organizer?.displayName as string;
+        const startDate = gCalEvent?.start?.dateTime as string;
+        const endDate = gCalEvent?.end?.dateTime as string;
+        const calId = gCalEvent?.organizer?.email as string;
+        const updatedTime = gCalEvent?.updated as string;
+        await notionUtils.updateNotionTask(task.id, title, startDate, endDate, tags, calId, eventId, updatedTime);
+      } else {
+        console.log(`Nothing to update for "${task.properties[TASK_NAME_PROP]['title'][0]['plain_text']}"`);
+        continue;
+      }
+    }
   } catch (err) {
     console.log(err);
   }
 })();
-
-const getNotionTasks = async (): Promise<Page[]> => {
-  try {
-    const res = await notion.databases.query({
-      database_id: DATABASE_ID,
-      // filter: {
-      //   property: 'Name',
-      //   text: {
-      //     equals: 'test',
-      //   },
-      // },
-    });
-    return res.results;
-  } catch (err) {
-    throw err;
-  }
-};
-
-(async () => {
-  const response = await notion.databases.query({
-    database_id: DATABASE_ID,
-    filter: {
-      property: 'Due Date',
-      date: {
-        equals: new Date().toISOString(),
-      },
-    },
-  });
-  let eventInterval;
-
-  // response.results.forEach((result) => {
-  //   if (!result.properties[GCAL_SYNC_PROPERTY].checkbox) {
-  //     console.log('Not synced with gcal', result.properties['Due Date']);
-  //     const dueDate = result.properties['Due Date'];
-  //     if (dueDate.date.end) {
-  //       const startDate = dueDate.date.start;
-  //       const endDate = dueDate.date.end;
-  //       const interval = new Date(endDate) - new Date(startDate);
-  //       eventInterval = interval ? interval : DEFAULT_INTERVAL;
-  //     } else {
-  //       eventInterval = DEFAULT_INTERVAL;
-  //     }
-  //     console.log(eventInterval);
-  //   }
-  // });
-  const tasks = await getNotionTasks();
-
-  const commonTasks = tasks.filter((task) =>
-    allGcalEvents.some((event) => {
-      return (
-        task?.properties?.[GCAL_EVENT_ID_PROPERTY]?.['rich_text']?.length &&
-        event.id === task?.properties?.[GCAL_EVENT_ID_PROPERTY]?.['rich_text']?.[0]?.plain_text
-      );
-    })
-  );
-  const tasksOnlyInNotion = tasks.filter(
-    (task) =>
-      !allGcalEvents.some(
-        (event) =>
-          task.properties[GCAL_EVENT_ID_PROPERTY]?.['rich_text'].length &&
-          event.id === task.properties[GCAL_EVENT_ID_PROPERTY]?.['rich_text']?.[0]?.plain_text
-      )
-  );
-  const tasksOnlyInGCal = allGcalEvents.filter(
-    (event) =>
-      !tasks.some(
-        (task) =>
-          task.properties[GCAL_EVENT_ID_PROPERTY]?.['rich_text']?.length &&
-          event.id === task.properties[GCAL_EVENT_ID_PROPERTY]?.['rich_text']?.[0]?.plain_text
-      )
-  );
-  console.log(
-    'COMMON TASKS:',
-    commonTasks[0]?.properties['Project']['relation'],
-    'TASKS ONLY IN GCAL:',
-    tasksOnlyInGCal
-  );
-  // TODO
-  // for commonTasks check if update is required on notion or google calendar, prioritse notion update
-  // for tasksOnlyInGCal create new task in notion
-  // for tasksOnlyInNotion create new event in google calendar
-  // tasks.forEach((task) => {
-  //   if (task[GCAL_SYNC_PROPERTY]) {
-  //     // if task in on google calendar or not
-  //     // create event in google calendar
-  //   } else if (task[GCAL_UPDATE_PROPERTY] && task[GCAL_EVENT_ID_PROPERTY]) {
-  //     // does the existing task on calendar require update
-  //     // sync in google calendar
-  //   } else if (false) {
-  //     // if the task is only on google calendar
-  //     // bring it back to notion
-  //   } else {
-  //     // assume task is updated in google calendar but not in notion
-  //     // check if Last GCal Edit Time is different for the google calendar event
-  //     // sync it back to notion
-  //   }
-  // });
-
-  tasksOnlyInNotion.forEach(async (task) => {
-    // create a new event in google calendar
-    console.log(task.properties.Name['title'][0].plain_text);
-    if (task.properties.Name['title']?.[0]?.plain_text === 'test') {
-      const calendarName = (task.properties[TAGS_PROPERTY]?.['multi_select']?.[0]?.name as string) ?? '';
-      if (calendarName) {
-        if (calendarAlreadyExist(calendarName)) {
-        } else {
-          // create a new calendar with the calendar name
-          const timeZone = 'Asia/Kolkata';
-          const calId = await createNewCalendar(calendarName, timeZone);
-          // create a new event
-          const title = task.properties['Name']['title'][0]['plain_text'];
-          const tags: string[] = [];
-          task.properties[TAGS_PROPERTY]?.['multi_select'].forEach((tag) => {
-            tags.push(tag['name']);
-          });
-          const done = task.properties['Done']['checkbox'];
-          const energyLevel = task.properties['Enery Level']?.['select'] ?? '';
-
-          const description = getDescription(tags, done, energyLevel);
-          await createNewEvent(calId, '', '', title, description);
-        }
-      } else {
-        throw 'No tags to get calendar name. Make sure the task is assigned atleast one tag';
-      }
-    }
-  });
-})()
-  .then()
-  .catch(console.log);
-
-const calendarAlreadyExist = (calendarName: string): boolean => {
-  let exist = false;
-  const index = calendarList.findIndex((c) => c.summary === calendarName);
-  if (index === -1) {
-    exist = false;
-  } else {
-    exist = true;
-  }
-  return exist;
-};
-
-const createNewCalendar = async (calendarName: string, timeZone: string) => {
-  const res = await calendar.calendars.insert({
-    requestBody: {
-      conferenceProperties: {},
-      summary: calendarName,
-      timeZone: 'Asia/Kolkata',
-    },
-  });
-  if (res.status === 200) {
-    const calendarId = res.data.id as string;
-    const getRes = await calendar.calendars.get({ calendarId });
-    calendarList.push(getRes.data);
-    return calendarId;
-  } else {
-    throw res.statusText;
-  }
-};
-
-const createNewEvent = async (
-  calendarId: string,
-  startDate: string,
-  endDate: string,
-  title: string,
-  description: string
-) => {
-  const res = await calendar.events.insert({
-    calendarId,
-    requestBody: {
-      start: { dateTime: startDate },
-      end: { dateTime: endDate },
-      summary: title,
-      description: description,
-    },
-  });
-  if (res.status === 200) {
-    // fetch the event and add it to the gCalEventsByCalId and allGcalEvents
-  } else {
-    throw res.statusText;
-  }
-};
-
-const getDescription = (tags: string[], done: boolean, energyLevel: string) => {
-  let description = '';
-  // add done status
-  description = `${description}Done: ${done ? 'Yes' : 'No'}`;
-  description = `${description}\n`;
-  // add tags
-  description = `${description}Tags:`;
-  tags.forEach((tag) => {
-    description = `${description} ${tag},`;
-  });
-  description = `${description}\n`;
-  // add energy level
-  description = `${description}Energy Level: ${energyLevel}`;
-  description = `${description}\n`;
-
-  return description;
-};
