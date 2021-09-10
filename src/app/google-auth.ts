@@ -67,7 +67,7 @@ const authenticate = async () => {
 };
 
 export const initGCal = async (): Promise<calendar_v3.Calendar> => {
-  const oAuth2Client = await authenticate();
+  await authenticate();
   // const calendar = google.calendar({ version: 'v3', oAuth2Client });
   const calendar = google.calendar('v3');
   return calendar;
