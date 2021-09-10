@@ -6,12 +6,13 @@ export enum Server {
 
 export enum Google {
   GOOGLE_SCOPES = 'https://www.googleapis.com/auth/calendar',
-  TOKEN_PATH = '/home/rishabh/projects/Notion-Google-Calendar-Sync/src/configs/token.json',
+  TOKEN_PATH = '/home/rishabh/github-projects/Notion-Google-Calendar-Sync/src/configs/token.json',
 }
 
 export enum Notion {
   GCAL_SYNC_PROP = 'Is task on google calendar?',
   GCAL_UPDATE_PROP = 'Update on GCal',
+  GCAL_EDIT_PROP = 'Last GCal Edit Time',
   GCAL_ID_PROP = 'Calendar ID',
   GCAL_EVENT_ID_PROP = 'GCal Event ID',
   DUE_DATE_PROP = 'Due Date',
@@ -23,4 +24,5 @@ export enum Notion {
   DEFAULT_START_HOUR_UTC = 3,
   DEFAULT_START_MINUTE_UTC = 30,
   DEFAULT_INTERVAL = 30, // interval for the event in minutes
+  DEFAULT_TIMEZONE = '+05:30',
 }
