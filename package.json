@@ -19,12 +19,14 @@
   "homepage": "https://github.com/Rishabh-Kapri/Notion-Google-Calendar-Sync#readme",
   "dependencies": {
     "@notionhq/client": "^0.3.1",
+    "cron": "^1.8.2",
     "express": "^4.17.1",
     "googleapis": "^84.0.0",
     "open": "^8.2.1",
     "server-destroy": "^1.0.1"
   },
   "devDependencies": {
+    "@types/cron": "^1.7.3",
     "@types/gapi": "0.0.41",
     "@types/server-destroy": "^1.0.1",
     "@typescript-eslint/eslint-plugin": "^4.30.0",
