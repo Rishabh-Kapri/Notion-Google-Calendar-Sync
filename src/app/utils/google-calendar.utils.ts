@@ -2,6 +2,7 @@ import { Page } from '@notionhq/client/build/src/api-types';
 import { calendar_v3 } from 'googleapis';
 import { getDescription, updateNotionTask } from './notion.utils';
 import { Notion } from '../constants';
+import { gCalEventsByEventId } from '../store';
 const {
   GCAL_EVENT_ID_PROP,
   GCAL_EDIT_PROP,
@@ -44,8 +45,19 @@ export const checkForGCalUpdateTime = (
     let updatedTime = new Date(gCalEvent?.updated as string).getTime();
     const notionTime = new Date(notionGCalEditTime).getTime();
     const difference = Math.abs(updatedTime - notionTime) / 60000; // in minutes
-    if (gCalEvent && difference > 5) {
-      // update difference is greater than 5 minutes
+    console.log(
+      'EVENT:',
+      gCalEvent,
+      'GCAL UPDATE TIME:',
+      new Date(gCalEvent?.updated as string).toString(),
+      'TIME IN NOTION:',
+      notionGCalEditTime,
+      'DIFFERENCE IN MINUTES:',
+      difference
+    );
+
+    if (gCalEvent && difference > 1) {
+      // update difference is greater than 1 minutes
       res = true;
     }
   }
@@ -178,8 +190,20 @@ export const updateGCalEvent = async (calendar: calendar_v3.Calendar, calId: str
       const tags = event.organizer?.displayName as string;
       const startDate = event.start?.dateTime as string;
       const endDate = event.end?.dateTime as string;
-      const updatedTime = event.updated as string;
+      let updatedTime = event.updated as string;
+
+      const notionGCalEditTime = task.properties[GCAL_EDIT_PROP]?.['date']?.['start'];
+      const difference = Math.abs(new Date(updatedTime).getTime() - new Date(notionGCalEditTime).getTime()) / 60000; // in minutes
+      console.log('Difference for notion update:', difference);
+      const existingEvent = gCalEventsByEventId.get(eventId);
+      if (new Date(existingEvent?.updated as string).getTime() === new Date(updatedTime).getTime()) {
+        updatedTime = new Date().toISOString();
+      }
       await updateNotionTask(task.id, title, startDate, endDate, tags, calId, eventId, updatedTime);
+      if (difference > 1) {
+        // if difference is greater than 1 minutes only then update notion task
+        // this is needed because google calendar doesn't update the updated time for events that don't change values
+      }
       return true;
     } else {
       throw res.statusText;
