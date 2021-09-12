@@ -1,18 +1,20 @@
 import { calendar_v3 } from 'googleapis';
 import { initGCal } from './google-auth';
-import { Page } from '@notionhq/client/build/src/api-types';
 import * as notionUtils from './utils/notion.utils';
 import * as gCalUtils from './utils/google-calendar.utils';
 import { Notion } from './constants';
 const { GCAL_UPDATE_PROP, GCAL_EVENT_ID_PROP, TASK_NAME_PROP, TAGS_PROP } = Notion;
-
-let calendar: calendar_v3.Calendar;
-let gCalEventsByCalId: Record<string, calendar_v3.Schema$Event[]> = {};
-let allGcalEvents: calendar_v3.Schema$Event[] = [];
-let gCalEventsByEventId: Map<string, calendar_v3.Schema$Event> = new Map();
-let notionTasksByEventId: Map<string, Page> = new Map();
-let calendarList: calendar_v3.Schema$CalendarListEntry[] = [];
-let notionTasks: Page[] = [];
+// @TODO
+// change this
+let {
+  calendar,
+  gCalEventsByCalId,
+  allGcalEvents,
+  gCalEventsByEventId,
+  notionTasksByEventId,
+  calendarList,
+  notionTasks,
+} = require('./store');
 
 export const init = async () => {
   try {
