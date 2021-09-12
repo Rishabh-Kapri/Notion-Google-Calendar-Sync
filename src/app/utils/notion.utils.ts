@@ -137,10 +137,11 @@ export const updateNotionTask = async (
   gCalEventId: string,
   gCalUpdatedTime: string
 ) => {
+  const props = getProperties(title, calId, gCalEventId, startDate, endDate, tags, gCalUpdatedTime);
   const res = await notion.pages.update({
     page_id: pageId,
     archived: false,
-    properties: getProperties(title, calId, gCalEventId, startDate, endDate, tags, gCalUpdatedTime),
+    properties: props,
   });
   if (res) {
     console.log(`UPDATED NOTION TASK: ${res.properties[TASK_NAME_PROP]['title'][0]['plain_text']}`);
