@@ -3,6 +3,8 @@ import { initGCal } from './google-auth';
 import * as notionUtils from './utils/notion.utils';
 import * as gCalUtils from './utils/google-calendar.utils';
 import { Notion } from './constants';
+import { logger } from './utils/logger.utils';
+
 const { GCAL_UPDATE_PROP, GCAL_EVENT_ID_PROP, TASK_NAME_PROP, TAGS_PROP } = Notion;
 // @TODO
 // change this
@@ -60,9 +62,9 @@ export const init = async () => {
     const tasksOnlyInGCal = allGcalEvents.filter((event) => {
       return !notionTasksByEventId.has(event.id as string);
     });
-    console.log('COMMON TASKS:', commonTasks.length);
-    console.log('TASK ONLY IN NOTION:', tasksOnlyInNotion.length);
-    console.log('TASK ONLY IN GCAL:', tasksOnlyInGCal.length);
+    logger.info('COMMON TASKS:', commonTasks.length);
+    logger.info('TASK ONLY IN NOTION:', tasksOnlyInNotion.length);
+    logger.info('TASK ONLY IN GCAL:', tasksOnlyInGCal.length);
 
     for (let task of tasksOnlyInNotion) {
       if (!task.properties['Is Recurring?']?.['formula']?.['boolean']) {
@@ -81,9 +83,7 @@ export const init = async () => {
             await gCalUtils.createNewEventFromNotionTask(calendar, newCalendar.id as string, task);
           }
         } else {
-          console.log(
-            `No tags to get calendar name for ${task.properties[TASK_NAME_PROP]['title']?.[0]?.plain_text}. Make sure the task is assigned atleast one tag`
-          );
+          logger.warn(`No tags to get calendar name for ${task.properties[TASK_NAME_PROP]['title']?.[0]?.plain_text}. Make sure the task is assigned atleast one tag`);
           continue;
         }
       }
@@ -109,10 +109,10 @@ export const init = async () => {
       const eventId = task.properties[GCAL_EVENT_ID_PROP]?.['rich_text']?.[0]?.['plain_text'];
       const calId = gCalEventsByEventId.get(eventId)?.organizer?.email as string;
       if (task.properties[GCAL_UPDATE_PROP]?.['formula']?.['boolean']) {
-        console.log(`Updating "${task.properties[TASK_NAME_PROP]['title'][0]['plain_text']}" on google calendar`);
+        logger.info(`Updating "${task.properties[TASK_NAME_PROP]['title'][0]['plain_text']}" on google calendar`);
         await gCalUtils.updateGCalEvent(calendar, calId, eventId, task);
       } else if (gCalUtils.checkForGCalUpdateTime(gCalEventsByEventId, task)) {
-        console.log(`Updating "${task.properties[TASK_NAME_PROP]['title'][0]['plain_text']}" on notion`);
+        logger.info(`Updating "${task.properties[TASK_NAME_PROP]['title'][0]['plain_text']}" on notion`);
         const gCalEvent = gCalEventsByEventId.get(eventId);
         const title = gCalEvent?.summary as string;
         const tags = gCalEvent?.organizer?.displayName as string;
@@ -122,11 +122,11 @@ export const init = async () => {
         const updatedTime = gCalEvent?.updated as string;
         await notionUtils.updateNotionTask(task.id, title, startDate, endDate, tags, calId, eventId, updatedTime);
       } else {
-        console.log(`Nothing to update for "${task.properties[TASK_NAME_PROP]['title'][0]['plain_text']}"`);
+        logger.warn(`Nothing to update for "${task.properties[TASK_NAME_PROP]['title'][0]['plain_text']}"`)
         continue;
       }
     }
   } catch (err) {
-    console.log(err);
+    logger.error(err);
   }
 };

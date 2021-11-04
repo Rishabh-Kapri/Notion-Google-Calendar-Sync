@@ -2,6 +2,7 @@ import { InputPropertyValueMap } from '@notionhq/client/build/src/api-endpoints'
 import { Page } from '@notionhq/client/build/src/api-types';
 import { Notion } from '../constants';
 import { notion } from '../notion-auth';
+import { logger } from './logger.utils';
 const {
   DATABASE_ID,
   GCAL_SYNC_PROP,
@@ -144,7 +145,7 @@ export const updateNotionTask = async (
     properties: props,
   });
   if (res) {
-    console.log(`UPDATED NOTION TASK: ${res.properties[TASK_NAME_PROP]['title'][0]['plain_text']}`);
+    logger.info(`UPDATED NOTION TASK: ${res.properties[TASK_NAME_PROP]['title'][0]['plain_text']}`);
   } else {
     throw `Error while updating notion task`;
   }
@@ -166,10 +167,10 @@ export const createNotionTask = async (
     properties: getProperties(title, calId, eventId, startDate, endDate, tags, gCalUpdatedTime),
   });
   if (res) {
-    console.log(`CREATED NEW NOTION TASK FOR ${title}`);
+    logger.info(`CREATED NEW NOTION TASK FOR ${title}`);
     return true;
   } else {
-    console.log(`Some error occured while creating new task for event ${title}`);
+    logger.error(`Some error occured while creating new task for event ${title}`);
     throw `Some error occured while creating new task for event ${title}`;
   }
 };
